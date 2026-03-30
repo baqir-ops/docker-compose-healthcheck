@@ -1,0 +1,58 @@
+name: Docker Compose Health Check Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  health-check:
+    name: Build and Validate Container Health
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start containers
+        run: docker compose up -d --build
+
+      - name: Wait for containers to be healthy
+        run: |
+          echo "Waiting 20 seconds for containers to start..."
+          sleep 20
+
+      - name: Check container health status
+        run: |
+          WEB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' flask-dashboard)
+          LOGGER_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' flask-logger)
+
+          echo "Web container health: $WEB_HEALTH"
+          echo "Logger container health: $LOGGER_HEALTH"
+
+          if [ "$WEB_HEALTH" != "healthy" ]; then
+            echo "❌ Web container is not healthy!"
+            docker compose logs web
+            exit 1
+          fi
+
+          if [ "$LOGGER_HEALTH" != "healthy" ]; then
+            echo "❌ Logger container is not healthy!"
+            docker compose logs logger
+            exit 1
+          fi
+
+          echo "✅ All containers are healthy!"
+
+      - name: Test app endpoints
+        run: |
+          curl -f http://localhost:8090/
+          curl -f http://localhost:8090/health
+          curl -f http://localhost:8090/stats
+
+      - name: Show running containers
+        run: docker compose ps
+
+      - name: Tear down containers
+        if: always()
+        run: docker compose down

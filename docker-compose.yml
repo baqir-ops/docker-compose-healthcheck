@@ -1,0 +1,29 @@
+services:
+
+  web:
+    build: ./app
+    container_name: flask-dashboard
+    ports:
+      - "8090:5000"
+    environment:
+      - APP_ENV=production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  logger:
+    build: ./logger
+    container_name: flask-logger
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
